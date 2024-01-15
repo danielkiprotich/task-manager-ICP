@@ -4,11 +4,15 @@ type Task = record {
   title : text;
   updated_at : opt nat64;
   creator : principal;
-  days : int;
   description : text;
+  due_in_minutes : int;
   created_date : nat64;
 };
-type TaskPayload = record { title : text; days : float64; description : text };
+type TaskPayload = record {
+  title : text;
+  description : text;
+  due_in_minutes : float64;
+};
 type _AzleResult = variant { Ok : Task; Err : text };
 type _AzleResult_1 = variant { Ok : vec Task; Err : text };
 service : () -> {

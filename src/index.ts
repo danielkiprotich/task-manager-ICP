@@ -19,7 +19,7 @@ type Task = Record<{
   creator: Principal;
   description: string;
   status: string;
-  due_in_minutes: bigint;
+  due_in_minutes: bigint; //  used minutes for testing, can be changed to days or hours
   updated_at: Opt<nat64>;
   created_date: nat64;
 }>;
@@ -28,6 +28,11 @@ type TaskPayload = Record<{
   title: string;
   description: string;
   due_in_minutes: number;
+}>;
+
+type TaskStatusPayload = Record<{
+  id: string;
+  statusUpdate: string;
 }>;
 
 const taskStorage = new StableBTreeMap<string, Task>(0, 44, 512);
@@ -167,20 +172,19 @@ export function deleteTask(id: string): Result<Task, string> {
 
 //Change Task Status
 $update;
-export function changeTaskStatus(
-  id: string,
-  statusUpdate: string
+export function updateTaskStatus(
+  payload: TaskStatusPayload
 ): Result<Task, string> {
-  return match(taskStorage.get(id), {
+  return match(taskStorage.get(payload.id), {
     Some: (task) => {
       if (task.creator.toString() !== ic.caller().toString()) {
         return Result.Err<Task, string>("Only authorized user can access Task");
       }
-      const updatedTask: Task = { ...task, status: statusUpdate };
+      const updatedTask: Task = { ...task, status: payload.statusUpdate };
       taskStorage.insert(task.id, updatedTask);
       return Result.Ok<Task, string>(updatedTask);
     },
-    None: () => Result.Err<Task, string>(`Task id:${id} not found`),
+    None: () => Result.Err<Task, string>(`Task id:${payload.id} not found`),
   });
 }
 

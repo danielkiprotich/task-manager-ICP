@@ -1,129 +1,106 @@
-# Parking Management System
+# Task Management Smart Contract
+
+This TypeScript code defines a basic task management system on the Internet Computer. This is a CRUD (Create, Read, Update, Delete) Internet computer smart contract for managing tasks, including search, filtering, and status-based retrieval. It also includes some basic authorization checks to ensure that users can only manipulate their own tasks.
 
 ## Overview
 
-This smart contract implements a parking reservation system using the typescript on azle for internet Computer. The system allows for the initialization of an owner, addition of parking slots, allocation of parking spaces to clients, valet delivery, and various operations on parking slots.
+### 1. Type Definitions
 
-## Prerequisites
+- **Task Type:**
 
-- Node
-- Typescript
-- DFX
-- IC CDK
+  ```typescript
+  type Task = Record<{
+    id: string;
+    title: string;
+    creator: Principal;
+    description: string;
+    status: string;
+    due_in_minutes: bigint;
+    updated_at: Opt<nat64>;
+    created_date: nat64;
+  }>;
+  ```
 
-## Installation
+- **TaskPayload Type:**
 
-1. **Clone the repository:**
+  ```typescript
+  type TaskPayload = Record<{
+    title: string;
+    description: string;
+    due_in_minutes: number;
+  }>;
+  ```
 
-    ```bash
-    git clone https://github.com/Collins-Ruto/task-management.git
-    cd task-management
-    ```
+### 2. Storage
 
-## Project Structure
+- A stable BTree map (`taskStorage`) is used to store tasks
+  
+  ```typescript
+  const taskStorage = new StableBTreeMap<string, Task>(0, 44, 512);
+  ```
 
-The project is organized into the following directories and files:
+### 3. Update Functions
 
-- **`src/`**: Contains the source code for the parking management system.
-  - **`index.ts`**: App entry point Implementation of the parking management system.
+- Update functions modify the state. For example:
+  
+  ```typescript
+  @update
+  function addTask(payload: TaskPayload): Result<Task, string> { /* ... */ }
+  ```
 
-- **`node_modules/`**: Directory for project dependencies.
+### 4. Query Functions
 
-- **`package.json`**: Configuration file for npm, including project dependencies and scripts.
+- Query functions retrieve data but don't modify the state:
+  
+  ```typescript
+  @query
+  function getTasks(): Result<Vec<Task>, string> { /* ... */ }
 
-- **`tsconfig.json`**: TypeScript configuration file, specifying compiler options.
+  @query
+  function getTaskById(id: string): Result<Task, string> { /* ... */ }
 
-- **`LICENSE`**: MIT License file, detailing the terms under which the project is licensed.
+  @query
+  function searchTasks(searchInput: string): Result<Vec<Task>, string> { /* ... */ }
 
-- **`README.md`**: Project documentation providing an overview, installation instructions, usage details, and license information.
+  @query
+  function getTasksByStatus(status: string): Result<Vec<Task>, string> { /* ... */ }
 
-## Functions
+  @query
+  function getTasksPastDue(): Result<Vec<Task>, string> { /* ... */ }
+  ```
 
-### `initOwner(name: string): string`
+### 5. UUID Generation
 
-- Initializes the system owner with a unique ID, name, and timestamp.
-- There can only be one owner per contract.
+- A workaround for generating UUIDs using the `uuid` library:
+  
+  ```typescript
+  globalThis.crypto = {
+    getRandomValues: () => {
+      let array = new Uint8Array(32);
+      for (let i = 0; i < array.length; i++) {
+        array[i] = Math.floor(Math.random() * 256);
+      }
+      return array;
+    },
+  };
+  ```
 
-### `getOwner(): Owner`
+### 6. Error Handling
 
-- Retrieves the details of the system owner.
+- The `Result` type is used for handling errors and successful results.
 
-### `getAvailableSlots(): Result<Vec<Parking>, string>`
+### 7. Authorization
 
-- Retrieves a list of available parking slots.
+- Some functions include authorization checks to ensure that only authorized users can perform certain actions.
 
-### `addParkingSlot(payload: ParkingPayload): string`
+### 8. Task Status Management
 
-- Adds a new parking slot to the system. Reserved for the contract owner.
+- Functions are provided to mark a task as completed, update the task status, and retrieve tasks by status.
 
-### `getParkingSpace(payload: AllocationPayload): string`
+### 9. Due Date Handling
 
-- Allocates a parking space to a client, marking the slot as occupied.
+- The due date is represented in minutes, You could adjust this to hours or days, and there's a function to retrieve tasks past their due date.
 
-### `valetDelivery(payload: ValletPayload): string`
+### 10. Date and Time
 
-- Handles vallet delivery, updating the total cost and client's location.
-
-### `pickupCar(id: string): { msg: string; price: number }`
-
-- Picks up a car from a parking slot, calculates the parking duration and cost.
-
-### `updateParkingSlot(id: string, payload: ParkingPayload): string`
-
-- Updates information for a parking slot, such as parking ID and price. Reserved for the contract owner.
-
-### `deleteParkingSlot(id: string): string`
-
-- Deletes a parking slot from the system. Reserved for the contract owner.
-
-## Usage
-
-- Initialize the owner using `initOwner(name)`.
-- Add parking slots with `addParkingSlot(payload)`.
-- Allocate parking spaces to clients using `getParkingSpace(payload)`.
-- Manage vallet delivery with `valetDelivery(payload)`.
-- Perform various operations on parking slots, including updates and deletions.
-
-## Try it out
-
-`dfx` is the tool you will use to interact with the IC locally and on mainnet. If you don't already have it installed:
-
-```bash
-npm run dfx_install
-```
-
-Next you will want to start a replica, which is a local instance of the IC that you can deploy your canisters to:
-
-```bash
-npm run replica_start
-```
-
-If you ever want to stop the replica:
-
-```bash
-npm run replica_stop
-```
-
-Now you can deploy your canister locally:
-
-```bash
-npm install
-npm run canister_deploy_local
-```
-
-To call the methods on your canister:
-
-```bash
-npm run name_of_function
-npm run name_of_function
-```
-
-Assuming you have [created a cycles wallet](https://internetcomputer.org/docs/current/developer-docs/quickstart/network-quickstart) and funded it with cycles, you can deploy to mainnet like this:
-
-```bash
-npm run canister_deploy_mainnet
-```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- The `ic.time()` function is used to get the current timestamp.
