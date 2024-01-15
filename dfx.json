@@ -1,0 +1,12 @@
+{
+  "canisters": {
+    "task_management": {
+      "type": "custom",
+      "root": "src",
+      "ts": "src/index.ts",
+      "candid": "src/index.did",
+      "build": "npx azle task_management",
+      "wasm": ".azle/task_management/task_management.wasm.gz"
+    }
+  }
+}
