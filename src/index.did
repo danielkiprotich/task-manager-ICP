@@ -1,3 +1,6 @@
+type Employee = record { id : text; name : text; email : text };
+type EmployeePayload = record { name : text; email : text };
+type EmployeeTaskAssign = record { taskId : text; employeeId : text };
 type Task = record {
   id : text;
   status : text;
@@ -5,25 +8,39 @@ type Task = record {
   updated_at : opt nat64;
   creator : principal;
   description : text;
+  employeeId : opt text;
+  category : text;
   due_in_minutes : int;
   created_date : nat64;
 };
 type TaskPayload = record {
   title : text;
   description : text;
+  category : text;
   due_in_minutes : float64;
 };
-type _AzleResult = variant { Ok : Task; Err : text };
-type _AzleResult_1 = variant { Ok : vec Task; Err : text };
+type TaskStatusPayload = record { id : text; statusUpdate : text };
+type _AzleResult = variant { Ok : Employee; Err : text };
+type _AzleResult_1 = variant { Ok : Task; Err : text };
+type _AzleResult_2 = variant { Ok : vec Employee; Err : text };
+type _AzleResult_3 = variant { Ok : vec Task; Err : text };
 service : () -> {
-  addTask : (TaskPayload) -> (_AzleResult);
-  changeTaskStatus : (text, text) -> (_AzleResult);
-  completedTask : (text) -> (_AzleResult);
-  deleteTask : (text) -> (_AzleResult);
-  getTaskById : (text) -> (_AzleResult) query;
-  getTasks : () -> (_AzleResult_1) query;
-  getTasksByStatus : (text) -> (_AzleResult_1) query;
-  getTasksPastDue : () -> (_AzleResult_1) query;
-  searchTasks : (text) -> (_AzleResult_1) query;
-  updateTask : (text, TaskPayload) -> (_AzleResult);
+  addEmployee : (EmployeePayload) -> (_AzleResult);
+  addTask : (TaskPayload) -> (_AzleResult_1);
+  assignEmployee : (EmployeeTaskAssign) -> (_AzleResult_1);
+  completedTask : (text) -> (_AzleResult_1);
+  deleteTask : (text) -> (_AzleResult_1);
+  getAllEmployees : () -> (_AzleResult_2) query;
+  getAllTasks : () -> (_AzleResult_3) query;
+  getEmployeeAnalysis : (text) -> (text) query;
+  getEmployeeById : (text) -> (_AzleResult) query;
+  getTaskByEmployeeId : (text) -> (_AzleResult_3) query;
+  getTaskById : (text) -> (_AzleResult_1) query;
+  getTasksAnalysis : () -> (text) query;
+  getTasksByCategory : (text) -> (_AzleResult_3) query;
+  getTasksByStatus : (text) -> (_AzleResult_3) query;
+  getTasksPastDue : () -> (_AzleResult_3) query;
+  searchTasks : (text) -> (_AzleResult_3) query;
+  updateTask : (text, TaskPayload) -> (_AzleResult_1);
+  updateTaskStatus : (TaskStatusPayload) -> (_AzleResult_1);
 }

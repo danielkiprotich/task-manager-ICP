@@ -22,12 +22,31 @@ type Task = Record<{
   due_in_minutes: bigint; //  used minutes for testing, can be changed to days or hours
   updated_at: Opt<nat64>;
   created_date: nat64;
+  employeeId: Opt<string>;
+  category: string;
+}>;
+
+type Employee = Record<{
+  id: string;
+  name: string;
+  email: string;
+}>;
+
+type EmployeePayload = Record<{
+  name: string;
+  email: string;
+}>;
+
+type EmployeeTaskAssign = Record<{
+  employeeId: string;
+  taskId: string;
 }>;
 
 type TaskPayload = Record<{
   title: string;
   description: string;
   due_in_minutes: number;
+  category: string;
 }>;
 
 type TaskStatusPayload = Record<{
@@ -36,6 +55,7 @@ type TaskStatusPayload = Record<{
 }>;
 
 const taskStorage = new StableBTreeMap<string, Task>(0, 44, 512);
+const employeeStorage = new StableBTreeMap<string, Employee>(1, 44, 512);
 
 // Allows one to add a Task
 $update;
@@ -54,6 +74,8 @@ export function addTask(payload: TaskPayload): Result<Task, string> {
       created_date: ic.time(),
       updated_at: Opt.None,
       status: "Created",
+      employeeId: Opt.None,
+      category: payload.category,
       due_in_minutes:
         BigInt(payload.due_in_minutes) * BigInt(60000000000) +
         BigInt(ic.time()),
@@ -65,9 +87,93 @@ export function addTask(payload: TaskPayload): Result<Task, string> {
   }
 }
 
+// Add Employee
+$update;
+export function addEmployee(
+  payload: EmployeePayload
+): Result<Employee, string> {
+  // Validate input data
+  if (!payload.name || !payload.email) {
+    return Result.Err<Employee, string>("Missing or invalid input data");
+  }
+
+  try {
+    const newEmployee: Employee = {
+      id: uuidv4(),
+      name: payload.name,
+      email: payload.email,
+    };
+    employeeStorage.insert(newEmployee.id, newEmployee);
+    return Result.Ok<Employee, string>(newEmployee);
+  } catch (err) {
+    return Result.Err<Employee, string>(
+      "could not create Employee:" + payload.name
+    );
+  }
+}
+
+// Get all Employees
+$query;
+export function getAllEmployees(): Result<Vec<Employee>, string> {
+  const employees = employeeStorage.values();
+
+  if (employees.length === 0) {
+    return Result.Err<Vec<Employee>, string>(
+      "No employees found, please add one"
+    );
+  }
+
+  return Result.Ok<Vec<Employee>, string>(employees);
+}
+
+// Get Employee by id
+$query;
+export function getEmployeeById(id: string): Result<Employee, string> {
+  return match(employeeStorage.get(id), {
+    Some: (employee) => Result.Ok<Employee, string>(employee),
+    None: () => Result.Err<Employee, string>(`Employee id:${id} not found`),
+  });
+}
+
+// assign employee to task
+$update;
+export function assignEmployee(
+  payload: EmployeeTaskAssign
+): Result<Task, string> {
+  return match(taskStorage.get(payload.taskId), {
+    Some: (task) => {
+      if (task.creator.toString() !== ic.caller().toString()) {
+        return Result.Err<Task, string>("Only authorized user can access Task");
+      }
+
+      // check if employee exists
+      const employee = employeeStorage.get(payload.employeeId);
+      if (!employee) {
+        return Result.Err<Task, string>(
+          `Employee id:${payload.employeeId} not found`
+        );
+      }
+
+      try {
+        const updatedTask: Task = {
+          ...task,
+          employeeId: Opt.Some(payload.employeeId),
+        };
+        taskStorage.insert(task.id, updatedTask);
+        return Result.Ok<Task, string>(updatedTask);
+      } catch (error) {
+        return Result.Err<Task, string>(
+          "could not assign employee to task due to:" + error
+        );
+      }
+    },
+    None: () => Result.Err<Task, string>(`Task id:${payload.taskId} not found`),
+  });
+}
+
 // get Tasks
 $query;
-export function getTasks(): Result<Vec<Task>, string> {
+export function getAllTasks(): Result<Vec<Task>, string> {
   const tasks = taskStorage.values();
 
   if (tasks.length === 0) {
@@ -89,6 +195,31 @@ export function getTaskById(id: string): Result<Task, string> {
     },
     None: () => Result.Err<Task, string>(`Task id:${id} not found`),
   });
+}
+
+// Get task per employeeId
+$query;
+export function getTaskByEmployeeId(
+  employeeId: string
+): Result<Vec<Task>, string> {
+  const tasks = taskStorage.values();
+  const filteredTasks: Vec<Task> = [];
+  tasks.forEach((task) => {
+    match(task.employeeId, {
+      Some: (id) => {
+        if (id === employeeId) {
+          filteredTasks.push(task);
+        }
+      },
+      None: () => {},
+    });
+  });
+
+  if (filteredTasks.length === 0) {
+    return Result.Err<Vec<Task>, string>("No tasks found, please add one");
+  }
+
+  return Result.Ok<Vec<Task>, string>(filteredTasks);
 }
 
 // Search for Task by title or description4
@@ -116,11 +247,15 @@ export function searchTasks(searchInput: string): Result<Vec<Task>, string> {
   }
 }
 
-// Allows marking of completed task
+// Allows marking of completed task by the creator
 $update;
 export function completedTask(id: string): Result<Task, string> {
   return match(taskStorage.get(id), {
     Some: (task) => {
+      if (task.creator.toString() !== ic.caller().toString()) {
+        return Result.Err<Task, string>("Only authorized user can access Task");
+      }
+
       const completeTask: Task = { ...task, status: "Completed" };
       taskStorage.insert(task.id, completeTask);
       return Result.Ok<Task, string>(completeTask);
@@ -188,12 +323,28 @@ export function updateTaskStatus(
   });
 }
 
+// get tasks by category
+$query;
+export function getTasksByCategory(
+  category: string
+): Result<Vec<Task>, string> {
+  const tasksByCategory = taskStorage
+    .values()
+    .filter((task) => task.category === category);
+
+  if (tasksByCategory.length === 0) {
+    return Result.Err<Vec<Task>, string>("No tasks in this category");
+  }
+
+  return Result.Ok(tasksByCategory);
+}
+
 // Get Tasks by Status
 $query;
 export function getTasksByStatus(status: string): Result<Vec<Task>, string> {
   const tasksByStatus = taskStorage
     .values()
-    .filter((task) => task.status === status);
+    .filter((task) => task.status.toLowerCase() === status.toLowerCase());
 
   if (tasksByStatus.length === 0) {
     return Result.Err<Vec<Task>, string>("No tasks with this status");
@@ -214,6 +365,67 @@ export function getTasksPastDue(): Result<Vec<Task>, string> {
   }
 
   return Result.Ok(tasksPastDue);
+}
+
+// tasks analysis, percentage of tasks completed, percentage of tasks past due,
+$query;
+export function getTasksAnalysis(): string {
+  const tasks = taskStorage.values();
+  const totalTasks = tasks.length;
+
+  if (totalTasks === 0) {
+    return "No tasks found, please add one";
+  }
+
+  const completedTasks = tasks.filter(
+    (task) => task.status === "Completed"
+  ).length;
+  const pastDueTasks = tasks.filter(
+    (task) =>
+      task.due_in_minutes < ic.time() &&
+      task.status.toLowerCase() !== "completed"
+  ).length;
+  const percentageCompleted = (completedTasks / totalTasks) * 100;
+  const percentagePastDue = (pastDueTasks / totalTasks) * 100;
+  const analysis = `${percentageCompleted}% of tasks are completed, ${percentagePastDue}% of tasks are past due`;
+  return analysis;
+}
+
+// employee analysis, percentage of tasks completed, percentage of tasks past due,
+$query;
+export function getEmployeeAnalysis(employeeId: string): string {
+  const tasks = taskStorage.values();
+  const filteredTasks: Vec<Task> = [];
+
+  tasks.forEach((task) => {
+    match(task.employeeId, {
+      Some: (id) => {
+        if (id === employeeId) {
+          filteredTasks.push(task);
+        }
+      },
+      None: () => {},
+    });
+  });
+
+  const totalTasks = filteredTasks.length;
+
+  if (filteredTasks.length === 0) {
+    return "No tasks found for this employee, please add one";
+  }
+
+  const completedTasks = filteredTasks.filter(
+    (task) => task.status === "Completed"
+  ).length;
+  const pastDueTasks = filteredTasks.filter(
+    (task) =>
+      task.due_in_minutes < ic.time() &&
+      task.status.toLowerCase() !== "completed"
+  ).length;
+  const percentageCompleted = (completedTasks / totalTasks) * 100;
+  const percentagePastDue = (pastDueTasks / totalTasks) * 100;
+  const analysis = `${percentageCompleted}% of tasks are completed, ${percentagePastDue}% of tasks are past due`;
+  return analysis;
 }
 
 // UUID workaround
