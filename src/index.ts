@@ -19,7 +19,7 @@ type Task = Record<{
   creator: Principal;
   description: string;
   status: string;
-  due_in_minutes: bigint; //  used minutes for testing, can be changed to days or hours
+  due_in_minutes: bigint;
   updated_at: Opt<nat64>;
   created_date: nat64;
   employeeId: Opt<string>;
@@ -60,7 +60,6 @@ const employeeStorage = new StableBTreeMap<string, Employee>(1, 44, 512);
 // Allows one to add a Task
 $update;
 export function addTask(payload: TaskPayload): Result<Task, string> {
-  // Validate input data
   if (!payload.title || !payload.description || !payload.due_in_minutes) {
     return Result.Err<Task, string>("Missing or invalid input data");
   }
@@ -92,7 +91,6 @@ $update;
 export function addEmployee(
   payload: EmployeePayload
 ): Result<Employee, string> {
-  // Validate input data
   if (!payload.name || !payload.email) {
     return Result.Err<Employee, string>("Missing or invalid input data");
   }
@@ -146,7 +144,6 @@ export function assignEmployee(
         return Result.Err<Task, string>("Only authorized user can access Task");
       }
 
-      // check if employee exists
       const employee = employeeStorage.get(payload.employeeId);
       if (!employee) {
         return Result.Err<Task, string>(
@@ -222,7 +219,7 @@ export function getTaskByEmployeeId(
   return Result.Ok<Vec<Task>, string>(filteredTasks);
 }
 
-// Search for Task by title or description4
+// Search for Task by title or description
 $query;
 export function searchTasks(searchInput: string): Result<Vec<Task>, string> {
   const lowerCaseSearchInput = searchInput.toLowerCase();
@@ -240,7 +237,6 @@ export function searchTasks(searchInput: string): Result<Vec<Task>, string> {
         "No tasks found by this search query"
       );
     }
-
     return Result.Ok(searchedTask);
   } catch (err) {
     return Result.Err("Error finding the task");
@@ -325,8 +321,8 @@ export function updateTaskStatus(
 
 // get tasks by category
 $query;
-export function getTasksByCategory(
-  category: string
+export function getTasksByCategory
+    category: string
 ): Result<Vec<Task>, string> {
   const tasksByCategory = taskStorage
     .values()
@@ -342,6 +338,10 @@ export function getTasksByCategory(
 // Get Tasks by Status
 $query;
 export function getTasksByStatus(status: string): Result<Vec<Task>, string> {
+  if (!status) {
+    return Result.Err<Vec<Task>, string>("Missing status input");
+  }
+
   const tasksByStatus = taskStorage
     .values()
     .filter((task) => task.status.toLowerCase() === status.toLowerCase());
@@ -358,7 +358,11 @@ $query;
 export function getTasksPastDue(): Result<Vec<Task>, string> {
   const tasksPastDue = taskStorage
     .values()
-    .filter((task) => task.due_in_minutes < ic.time());
+    .filter(
+      (task) =>
+        task.due_in_minutes < ic.time() &&
+        task.status.toLowerCase() !== "completed"
+    );
 
   if (tasksPastDue.length === 0) {
     return Result.Err<Vec<Task>, string>("No tasks past due date");
@@ -385,8 +389,8 @@ export function getTasksAnalysis(): string {
       task.due_in_minutes < ic.time() &&
       task.status.toLowerCase() !== "completed"
   ).length;
-  const percentageCompleted = (completedTasks / totalTasks) * 100;
-  const percentagePastDue = (pastDueTasks / totalTasks) * 100;
+  const percentageCompleted = ((completedTasks / totalTasks) * 100).toFixed(2);
+  const percentagePastDue = ((pastDueTasks / totalTasks) * 100).toFixed(2);
   const analysis = `${percentageCompleted}% of tasks are completed, ${percentagePastDue}% of tasks are past due`;
   return analysis;
 }
@@ -422,15 +426,14 @@ export function getEmployeeAnalysis(employeeId: string): string {
       task.due_in_minutes < ic.time() &&
       task.status.toLowerCase() !== "completed"
   ).length;
-  const percentageCompleted = (completedTasks / totalTasks) * 100;
-  const percentagePastDue = (pastDueTasks / totalTasks) * 100;
+  const percentageCompleted = ((completedTasks / totalTasks) * 100).toFixed(2);
+  const percentagePastDue = ((pastDueTasks / totalTasks) * 100).toFixed(2);
   const analysis = `${percentageCompleted}% of tasks are completed, ${percentagePastDue}% of tasks are past due`;
   return analysis;
 }
 
 // UUID workaround
 globalThis.crypto = {
-  // @ts-ignore
   getRandomValues: () => {
     let array = new Uint8Array(32);
 
